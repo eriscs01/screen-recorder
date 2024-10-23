@@ -2,14 +2,14 @@ import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
 
 let mediaRecorder;
-let recordedChunks = [];
-let timeStart;
-let timeEnd;
+let timestamps = { start: null, end: null }
 let videoFile;
 let ffmpeg;
-const inputFileType = 'video/webm'
+const videoFileType = 'video/mp4'
+const videoFileExt = 'mp4'
 
-document.getElementById('start').onclick = async () => {
+window.onClickStart = async function () {
+    let recordedChunks = [];
     let stream;
     try {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
@@ -19,6 +19,7 @@ document.getElementById('start').onclick = async () => {
     }
 
     const video = document.getElementById('video')
+    URL.revokeObjectURL(video.src);
     video.src = ""
 
     mediaRecorder = new MediaRecorder(stream);
@@ -31,15 +32,18 @@ document.getElementById('start').onclick = async () => {
 
     mediaRecorder.onstop = async () => {
         stream.getAudioTracks().forEach(track => {
-            track.enabled = false; // Mute audio
+            track.enabled = false;
+            track.stop();
         });
         stream.getVideoTracks().forEach(track => {
-            track.enabled = false; // Pause video
+            track.enabled = false;
+            track.stop();
         });
         onMediaRecorderStop()
-        const blob = new Blob(recordedChunks, { type: inputFileType });
+        const blob = new Blob(recordedChunks, { type: videoFileType });
+        recordedChunks = []
         const url = URL.createObjectURL(blob);
-        videoFile = new File([blob], 'recording.webm', { type: inputFileType });
+        videoFile = new File([blob], `recording.${videoFileExt}`, { type: videoFileType });
         video.src = url;
         video.load();
         video.autoplay = true;
@@ -50,57 +54,49 @@ document.getElementById('start').onclick = async () => {
 
     mediaRecorder.start();
     videoFile = undefined;
-    timeStart = undefined;
-    timeEnd = undefined;
+    timestamps = { start: null, end: null }
     onMediaRecorderStart()
 };
 
-document.getElementById('stop').onclick = () => {
+window.onClickStop = async function () {
     mediaRecorder.stop();
     onMediaRecorderStop()
 };
 
-document.getElementById('set-start').onclick = () => {
-    setStartTime(document.getElementById('video').currentTime)
+window.onClickSetStart = function () {
+    setTimestamp("start", document.getElementById('video').currentTime)
 }
 
-document.getElementById('set-end').onclick = () => {
-    setEndTime(document.getElementById('video').currentTime)
+window.onClickSetEnd = function () {
+    setTimestamp("end", document.getElementById('video').currentTime)
+}
+
+window.onClickDownload = async function () {
+    onDownloading()
+    try {
+        const compressedVideo = await compressVideo()
+        saveFile(compressedVideo)
+    } catch (error) {
+        console.log(error)
+    } finally {
+        onDownloaded()
+    }
 }
 
 document.getElementById('video').ondurationchange = () => {
     const video = document.getElementById('video')
     const duration = video.duration
     if (duration === Infinity) return
-    setStartTime(0)
-    setEndTime(video.duration)
+    setTimestamp("start", 0)
+    setTimestamp("end", video.duration)
     onVideoLoaded()
-    document.getElementById('download').onclick = async () => {
-        onDownloading()
-        try {
-            const compressedVideo = await compressVideo()
-            const a = document.createElement("a")
-            a.href = compressedVideo.url;
-            a.download = compressedVideo.fileName;
-            a.click()
-        } catch (error) {
-            console.log(error)
-        } finally {
-            onDownloaded()
-        }
-    };
 }
 
 window.addEventListener('resize', updateVideoContainerHeight);
 
-function setStartTime(time) {
-    timeStart = time
-    document.getElementById('time-start').textContent = formatVideoTime(timeStart)
-}
-
-function setEndTime(time) {
-    timeEnd = time
-    document.getElementById('time-end').textContent = formatVideoTime(timeEnd)
+function setTimestamp(type, time) {
+    timestamps[type] = time
+    document.getElementById(`time-${type}`).textContent = formatVideoTime(time)
 }
 
 function onMediaRecorderStart() {
@@ -157,7 +153,7 @@ function onDownloaded() {
 async function compressVideo() {
     if (!videoFile) return
     if (!ffmpeg) ffmpeg = new FFmpeg()
-    const compressedFileName = `Screen recording ${getTodaysDate()}.mp4`;
+    const compressedFileName = `Screen recording ${getTodaysDate()}.${videoFileExt}`;
     if (!ffmpeg.loaded) await ffmpeg.load();
 
     // Write the video file to FFmpeg's filesystem
@@ -169,17 +165,24 @@ async function compressVideo() {
     })
 
     // Run FFmpeg command to compress the video
-    await ffmpeg.exec(['-i', name, '-c:v', 'libx264', '-crf', '28', '-ss', String(timeStart), '-to', String(timeEnd), compressedFileName]);
+    const trimArgs = []
+    if (timestamps.start) {
+        trimArgs.push('-ss', String(timestamps.start))
+    }
+    if (timestamps.end) {
+        trimArgs.push('-to', String(timestamps.end))
+    }
+    await ffmpeg.exec(['-i', name, '-c:v', 'libx264', '-crf', '28', ...trimArgs, compressedFileName]);
 
 
     // Read the compressed video from FFmpeg's filesystem
     const data = await ffmpeg.readFile(compressedFileName);
 
     // Create a Blob from the compressed data and generate a download link
-    const compressedBlob = new Blob([data.buffer], { type: 'video/mp4' });
+    const compressedBlob = new Blob([data.buffer], { type: videoFileType });
     const compressedUrl = URL.createObjectURL(compressedBlob);
 
-    return { url: compressedUrl, fileName: compressedFileName }
+    return { url: compressedUrl, fileName: compressedFileName, blob: compressedBlob }
 }
 
 function formatVideoTime(currentTime) {
@@ -218,4 +221,14 @@ function updateVideoContainerHeight() {
     const containerWidth = containerHeight * aspectRatio
     document.getElementById('video-container').style.width = `${containerWidth}px`;
     video.hidden = false
+}
+
+function saveFile(compressedVideo) {
+    const link = document.createElement('a');
+    link.href = compressedVideo.url;
+    link.download = compressedVideo.fileName;
+    document.body.appendChild(link); // Append to body for Firefox compatibility
+    link.click();
+    URL.revokeObjectURL(link.href); // Clean up
+    document.body.removeChild(link); // Remove link after clicking
 }

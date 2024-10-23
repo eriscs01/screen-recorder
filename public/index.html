@@ -11,11 +11,11 @@
 <body>
     <h1>Screen Recorder</h1>
     <div>
-        <button id="start">Record</button>
-        <button id="stop" disabled>Stop</button>
-        <button id="set-start" disabled>Set Start</button>
-        <button id="set-end" disabled>Set End</button>
-        <button id="download" disabled>Download</button>
+        <button id="start" onclick="onClickStart()">Record</button>
+        <button id="stop" disabled onclick="onClickStop()">Stop</button>
+        <button id="set-start" disabled onclick="onClickSetStart()">Set Start</button>
+        <button id="set-end" disabled onclick="onClickSetEnd()">Set End</button>
+        <button id="download" disabled onclick="onClickDownload()">Download</button>
     </div>
     <div>
         <p id="status" hidden></p>
