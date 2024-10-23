@@ -11,6 +11,10 @@ const videoFileExt = 'mp4'
 window.onClickStart = async function () {
     let recordedChunks = [];
     let stream;
+    const timer = createTimer((seconds) => {
+        document.getElementById('status').hidden = false
+        document.getElementById('status').textContent = `Recording... ${formatVideoTime(seconds, 'short')}`
+    })
     try {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
     } catch (error) {
@@ -39,6 +43,7 @@ window.onClickStart = async function () {
             track.enabled = false;
             track.stop();
         });
+        timer.stop()
         onMediaRecorderStop()
         const blob = new Blob(recordedChunks, { type: videoFileType });
         recordedChunks = []
@@ -53,6 +58,7 @@ window.onClickStart = async function () {
     }
 
     mediaRecorder.start();
+    timer.start()
     videoFile = undefined;
     timestamps = { start: null, end: null }
     onMediaRecorderStart()
@@ -107,9 +113,8 @@ function onMediaRecorderStart() {
     document.getElementById('video-timestamps').hidden = true
     document.getElementById('video-container').hidden = true
     document.getElementById('download').disabled = true
-    document.getElementById('download').textContent = "Download"
     document.getElementById('status').hidden = false
-    document.getElementById('status').textContent = "Recording..."
+    document.getElementById('status').textContent = "Recording... 00:00"
 }
 
 function onMediaRecorderStop() {
@@ -185,15 +190,18 @@ async function compressVideo() {
     return { url: compressedUrl, fileName: compressedFileName, blob: compressedBlob }
 }
 
-function formatVideoTime(currentTime) {
+function formatVideoTime(currentTime, type = 'long') {
     // Calculate hours, minutes, seconds and milliseconds
-    const hours = Math.floor(currentTime / 3600);
-    const minutes = Math.floor((currentTime % 3600) / 60);
+    const minutes = Math.floor(currentTime / 60);
     const seconds = Math.floor(currentTime % 60);
     const milliseconds = Math.floor((currentTime - Math.floor(currentTime)) * 1000);
 
-    // Format the time as "HH:mm:ss.ms"
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+    // Format the time as "mm:ss.ms"
+    if (type === 'short') {
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    } else {
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+    }
 }
 
 function getTodaysDate() {
@@ -231,4 +239,28 @@ function saveFile(compressedVideo) {
     link.click();
     URL.revokeObjectURL(link.href); // Clean up
     document.body.removeChild(link); // Remove link after clicking
+}
+
+function createTimer(updateCallback, interval = 1000) {
+    let timerInterval;
+    let seconds = 0;
+    let isRunning = false;
+
+    return {
+        start: () => {
+            if (!isRunning) {
+                isRunning = true; // Set the running flag
+                timerInterval = setInterval(() => {
+                    seconds++; // Increment seconds
+                    updateCallback(seconds); // Call the update callback with the current seconds
+                }, interval);
+            }
+        },
+        stop: () => {
+            if (isRunning) {
+                clearInterval(timerInterval); // Stop the interval
+                isRunning = false; // Reset the running flag
+            }
+        }
+    };
 }
