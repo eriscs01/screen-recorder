@@ -21,6 +21,7 @@ h1 {
 }
 
 video {
+    min-width: 4rem;
     max-width: 100%;
 }
 

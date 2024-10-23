@@ -1,14 +1,22 @@
-const ffmpeg = FFmpeg.createFFmpeg({ log: true });
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile } from "@ffmpeg/util";
 
 let mediaRecorder;
 let recordedChunks = [];
 let timeStart;
 let timeEnd;
 let videoFile;
+let ffmpeg;
 const inputFileType = 'video/webm'
 
 document.getElementById('start').onclick = async () => {
-    const stream = await navigator.mediaDevices.getDisplayMedia();
+    let stream;
+    try {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    } catch (error) {
+        document.getElementById('status').textContent = "Screen capture is not allowed in this browser"
+        return
+    }
 
     const video = document.getElementById('video')
     video.src = ""
@@ -69,12 +77,17 @@ document.getElementById('video').ondurationchange = () => {
     onVideoLoaded()
     document.getElementById('download').onclick = async () => {
         onDownloading()
-        const compressedVideo = await compressVideo()
-        const a = document.createElement("a")
-        a.href = compressedVideo.url;
-        a.download = compressedVideo.fileName;
-        a.click()
-        onDownloaded()
+        try {
+            const compressedVideo = await compressVideo()
+            const a = document.createElement("a")
+            a.href = compressedVideo.url;
+            a.download = compressedVideo.fileName;
+            a.click()
+        } catch (error) {
+            console.log(error)
+        } finally {
+            onDownloaded()
+        }
     };
 }
 
@@ -143,22 +156,24 @@ function onDownloaded() {
 
 async function compressVideo() {
     if (!videoFile) return
+    if (!ffmpeg) ffmpeg = new FFmpeg()
     const compressedFileName = `Screen recording ${getTodaysDate()}.mp4`;
-    if (!ffmpeg.isLoaded()) await ffmpeg.load();
+    if (!ffmpeg.loaded) await ffmpeg.load();
 
     // Write the video file to FFmpeg's filesystem
-    ffmpeg.FS('writeFile', 'input.webm', await FFmpeg.fetchFile(videoFile));
-
-    ffmpeg.setLogger(function ({ type, message }) {
-        document.getElementById('status').textContent = `Processing: ${message}`;
+    const { name } = videoFile
+    await ffmpeg.writeFile(name, await fetchFile(videoFile));
+    const status = document.getElementById('status')
+    ffmpeg.on("log", ({ message }) => {
+        status.textContent = `Processing: ${message}`;
     })
 
     // Run FFmpeg command to compress the video
-    await ffmpeg.run('-i', 'input.webm', '-c:v', 'libx264', '-crf', '28', '-ss', String(timeStart), '-to', String(timeEnd), compressedFileName);
+    await ffmpeg.exec(['-i', name, '-c:v', 'libx264', '-crf', '28', '-ss', String(timeStart), '-to', String(timeEnd), compressedFileName]);
 
 
     // Read the compressed video from FFmpeg's filesystem
-    const data = ffmpeg.FS('readFile', compressedFileName);
+    const data = await ffmpeg.readFile(compressedFileName);
 
     // Create a Blob from the compressed data and generate a download link
     const compressedBlob = new Blob([data.buffer], { type: 'video/mp4' });
