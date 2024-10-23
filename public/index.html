@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen Recorder</title>
+    <script src="./ffmpeg.min.js"></script>
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+    <h1>Screen Recorder</h1>
+    <div>
+        <button id="start">Record</button>
+        <button id="stop" disabled>Stop</button>
+        <button id="set-start" disabled>Set Start</button>
+        <button id="set-end" disabled>Set End</button>
+        <button id="download" disabled>Download</button>
+    </div>
+    <p id="status" hidden></p>
+    <div id="video-timestamps" hidden>
+        <p>Start: <span id="time-start">00:00:00</span></p>
+        <p>End: <span id="time-end">00:00:00</span></p>
+    </div>
+    <div id="video-container" hidden>
+        <video id="video" controls></video>
+    </div>
+</body>
+<script src="./script.js"></script>
+
+</html>
